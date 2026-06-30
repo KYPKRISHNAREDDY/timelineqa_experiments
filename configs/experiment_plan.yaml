@@ -1,7 +1,7 @@
 task: atomic
 data_source: real_timelineqa
 seed: 42
-sample_sizes: [100]
+sample_sizes: [500]
 max_episodes_per_question: 100
 retriever: bm25
 top_k: 5
@@ -12,5 +12,3 @@ backend: hf
 models:
   - model_id: Qwen/Qwen2.5-1.5B-Instruct
     short_name: qwen15b
-  - model_id: HuggingFaceTB/SmolLM2-1.7B-Instruct
-    short_name: smollm17b
