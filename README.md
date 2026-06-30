@@ -75,7 +75,7 @@ original/TimelineQA
 
 Do not edit files inside `original/TimelineQA`. Our code lives in `src/` and `scripts/`.
 
-## C. Make Sample
+## C. Make Toy Sample
 
 ```bash
 python scripts/02_make_samples.py --task atomic --n 50 --seed 42
@@ -87,9 +87,27 @@ Output:
 data/samples/atomic_n50.jsonl
 ```
 
-If real TimelineQA data is not available yet, the script creates toy samples so the pipeline can be tested.
+This is toy data for pipeline testing only. Use it for quick smoke tests before spending GPU time.
 
-## D. Run First Smoke Test
+## D. Preparing Real TimelineQA Samples
+
+First clone the official TimelineQA repo:
+
+```bash
+bash scripts/00_clone_timelineqa.sh
+```
+
+Then prepare a real atomic sample:
+
+```bash
+python scripts/03_prepare_timelineqa_data.py --task atomic --n 50 --seed 42 --max_episodes_per_question 100 --output data/samples/real_atomic_n50.jsonl
+```
+
+This script uses the official TimelineQA generator in `original/TimelineQA` and writes converted records in this project JSONL format. It does not modify `original/TimelineQA`.
+
+For real experiments, toy fallback is disabled by default. If real TimelineQA data cannot be generated or loaded, the script stops with a clear error. Only use `--allow_toy_fallback` for pipeline debugging.
+
+## E. Run First Smoke Test
 
 Run only 3 questions first:
 
@@ -99,13 +117,19 @@ python scripts/04_run_model.py --task atomic --sample data/samples/atomic_n50.js
 
 This downloads only the selected model. It does not run every model. The `--debug_first_n 3` flag prints the first three questions, gold answers, retrieved episode ids, retrieved context, and predictions so you can inspect retrieval quality.
 
-## E. Evaluate
+To run the same smoke test on the real sample:
+
+```bash
+python scripts/04_run_model.py --task atomic --sample data/samples/real_atomic_n50.jsonl --model_id Qwen/Qwen2.5-0.5B-Instruct --backend hf --retriever bm25 --top_k 5 --max_new_tokens 16 --temperature 0 --output outputs/predictions/real_atomic_n50_qwen05b_bm25.jsonl --limit 3 --debug_first_n 3
+```
+
+## F. Evaluate
 
 ```bash
 python scripts/05_evaluate.py --predictions outputs/predictions/atomic_n50_qwen05b_bm25.jsonl --task atomic --output outputs/metrics/atomic_n50_qwen05b_bm25_metrics.json
 ```
 
-## F. Combine Results
+## G. Combine Results
 
 ```bash
 python scripts/06_make_results_table.py
@@ -117,7 +141,7 @@ Output:
 outputs/tables/baseline_results.csv
 ```
 
-## G. Google Colab Instructions
+## H. Google Colab Instructions
 
 1. Open `notebooks/run_timelineqa_colab.ipynb`.
 2. Runtime -> Change runtime type -> T4 GPU.
@@ -138,6 +162,30 @@ meta-llama/Llama-3.2-1B-Instruct
 ```
 
 Note: `meta-llama/Llama-3.2-1B-Instruct` may need Hugging Face access approval. If it fails, run the other models first.
+
+## One-Command Colab Run
+
+The autopilot runner reads:
+
+```text
+configs/experiment_plan.yaml
+```
+
+First run a smoke test with only 3 questions per model:
+
+```bash
+python scripts/07_run_experiment_plan.py --plan configs/experiment_plan.yaml --resume --limit 3 --copy_to_drive /content/drive/MyDrive/timelineqa_results
+```
+
+If the smoke test works, run the full `n=50` baseline:
+
+```bash
+python scripts/07_run_experiment_plan.py --plan configs/experiment_plan.yaml --resume --copy_to_drive /content/drive/MyDrive/timelineqa_results
+```
+
+The script prepares the real TimelineQA sample, runs each model one by one, evaluates each prediction file, updates `outputs/tables/baseline_results.csv`, and copies results to Drive after each completed model run.
+
+Do not start `n=500` or `n=1000` until `n=50` works. Models are still loaded one at a time internally, not all together.
 
 ## Sample JSONL Format
 

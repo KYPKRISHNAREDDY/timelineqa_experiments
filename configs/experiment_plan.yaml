@@ -1,0 +1,21 @@
+task: atomic
+data_source: real_timelineqa
+seed: 42
+sample_sizes: [50]
+max_episodes_per_question: 100
+retriever: bm25
+top_k: 5
+max_new_tokens: 16
+temperature: 0
+backend: hf
+
+# For first safety, comment out models manually if needed.
+models:
+  - model_id: Qwen/Qwen2.5-0.5B-Instruct
+    short_name: qwen05b
+  - model_id: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    short_name: tinyllama11b
+  - model_id: Qwen/Qwen2.5-1.5B-Instruct
+    short_name: qwen15b
+  - model_id: HuggingFaceTB/SmolLM2-1.7B-Instruct
+    short_name: smollm17b

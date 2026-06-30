@@ -235,7 +235,7 @@ def make_toy_samples(task: str, n: int, seed: int) -> list[dict[str, Any]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create TimelineQA-style JSONL samples.")
+    parser = argparse.ArgumentParser(description="Create toy TimelineQA-style JSONL samples for smoke testing.")
     parser.add_argument("--task", choices=["atomic", "multihop"], required=True)
     parser.add_argument("--n", type=int, required=True)
     parser.add_argument("--seed", type=int, default=42)
@@ -245,22 +245,11 @@ def main() -> None:
     if args.n <= 0:
         raise ValueError("--n must be positive.")
 
-    rng = random.Random(args.seed)
     output_path = Path(args.output) if args.output else PROJECT_ROOT / "data" / "samples" / f"{args.task}_n{args.n}.jsonl"
 
-    real_samples = find_real_samples(args.task)
-    toy_used = False
-    if len(real_samples) >= args.n:
-        samples = rng.sample(real_samples, args.n)
-        print(f"Loaded {args.n} samples from available TimelineQA-style files.")
-    else:
-        samples = list(real_samples)
-        needed = args.n - len(samples)
-        samples.extend(make_toy_samples(args.task, needed, args.seed + len(samples)))
-        toy_used = True
-        if real_samples:
-            print(f"Found only {len(real_samples)} real samples. Added {needed} toy samples to reach n={args.n}.")
-        print("WARNING: Real TimelineQA data not found. Created toy samples for pipeline testing only.")
+    samples = make_toy_samples(args.task, args.n, args.seed)
+    print("This is toy data for pipeline testing only.")
+    print("Use scripts/03_prepare_timelineqa_data.py for real TimelineQA samples.")
 
     ensure_dir(output_path.parent)
     write_jsonl(output_path, samples)
