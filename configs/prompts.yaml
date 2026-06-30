@@ -1,0 +1,30 @@
+atomic: |-
+  You are answering questions over a personal timeline.
+  Use only the provided timeline episodes.
+  Return only the final answer.
+  Do not explain.
+
+  Question:
+  {question}
+
+  Timeline episodes:
+  {context}
+
+  Answer:
+
+multihop: |-
+  You are answering questions over a personal timeline.
+  Use only the provided timeline episodes.
+  Return only the final answer.
+  Do not explain.
+  If the question asks "how many", return only the number.
+  If it asks "when", return only the date/year.
+  If it asks "average", return only the numeric value.
+
+  Question:
+  {question}
+
+  Timeline episodes:
+  {context}
+
+  Answer:

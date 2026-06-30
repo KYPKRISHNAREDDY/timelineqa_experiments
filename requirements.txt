@@ -1,0 +1,12 @@
+torch
+transformers
+accelerate
+sentencepiece
+protobuf
+pandas
+tqdm
+pyyaml
+rank-bm25
+scikit-learn
+huggingface_hub
+numpy

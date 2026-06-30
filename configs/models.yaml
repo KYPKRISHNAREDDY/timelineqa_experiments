@@ -1,0 +1,30 @@
+models:
+  - short_name: qwen25_0_5b
+    model_id: Qwen/Qwen2.5-0.5B-Instruct
+    backend: hf
+    max_new_tokens: 32
+    temperature: 0.0
+
+  - short_name: tinyllama_1_1b
+    model_id: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    backend: hf
+    max_new_tokens: 32
+    temperature: 0.0
+
+  - short_name: qwen25_1_5b
+    model_id: Qwen/Qwen2.5-1.5B-Instruct
+    backend: hf
+    max_new_tokens: 32
+    temperature: 0.0
+
+  - short_name: smollm2_1_7b
+    model_id: HuggingFaceTB/SmolLM2-1.7B-Instruct
+    backend: hf
+    max_new_tokens: 32
+    temperature: 0.0
+
+  - short_name: llama32_1b
+    model_id: meta-llama/Llama-3.2-1B-Instruct
+    backend: hf
+    max_new_tokens: 32
+    temperature: 0.0
