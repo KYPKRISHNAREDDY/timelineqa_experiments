@@ -107,6 +107,30 @@ This script uses the official TimelineQA generator in `original/TimelineQA` and 
 
 For real experiments, toy fallback is disabled by default. If real TimelineQA data cannot be generated or loaded, the script stops with a clear error. Only use `--allow_toy_fallback` for pipeline debugging.
 
+## Running Multi-hop Baseline
+
+Prepare a real TimelineQA multi-hop sample:
+
+```bash
+python scripts/03_prepare_timelineqa_data.py \
+  --task multihop \
+  --n 50 \
+  --seed 42 \
+  --max_episodes_per_question 200 \
+  --output data/samples/real_multihop_n50.jsonl
+```
+
+Run the multi-hop baseline plan:
+
+```bash
+python scripts/07_run_experiment_plan.py \
+  --plan configs/multihop_baseline_plan.yaml \
+  --resume \
+  --copy_to_drive /content/drive/MyDrive/timelineqa_results
+```
+
+This uses BM25 with `top_k=10` and runs `Qwen/Qwen2.5-1.5B-Instruct` only.
+
 ## E. Run First Smoke Test
 
 Run only 3 questions first:

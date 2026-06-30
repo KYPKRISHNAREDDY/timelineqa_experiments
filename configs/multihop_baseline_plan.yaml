@@ -1,0 +1,14 @@
+task: multihop
+data_source: real_timelineqa
+seed: 42
+sample_sizes: [50]
+max_episodes_per_question: 200
+retriever: bm25
+top_k: 10
+max_new_tokens: 32
+temperature: 0
+backend: hf
+
+models:
+  - model_id: Qwen/Qwen2.5-1.5B-Instruct
+    short_name: qwen15b
