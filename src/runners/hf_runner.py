@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from src.runners.base_runner import BaseRunner
+from src.runners.base_runner import BaseRunner, ModelOutput
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -13,7 +13,6 @@ Return ONLY the short final answer.
 Do not write a sentence.
 Do not explain.
 Do not mention the episode id.
-If the answer is a food item, return only the food item.
 
 Question:
 {question}
@@ -38,6 +37,7 @@ class HFRunner(BaseRunner):
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.prompt_template = prompt_template
+        self._chat_template_failed = False
 
         os.environ.setdefault("HF_HOME", str(PROJECT_ROOT / ".hf_cache"))
         os.environ.setdefault("TRANSFORMERS_CACHE", str(PROJECT_ROOT / ".hf_cache"))
@@ -84,9 +84,29 @@ class HFRunner(BaseRunner):
     def _build_prompt(self, question: str, context: str) -> str:
         return self.prompt_template.format(question=question, context=context)
 
-    def run_model(self, question: str, context: str) -> str:
+    def _tokenize_prompt(self, prompt: str) -> object:
+        messages = [{"role": "user", "content": prompt}]
+        if (
+            not self._chat_template_failed
+            and hasattr(self.tokenizer, "apply_chat_template")
+            and getattr(self.tokenizer, "chat_template", None)
+        ):
+            try:
+                rendered_prompt = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+                return self.tokenizer(rendered_prompt, return_tensors="pt")
+            except Exception as exc:
+                print(f"WARNING: chat template failed, falling back to plain prompt. Details: {exc}")
+                self._chat_template_failed = True
+
+        return self.tokenizer(prompt, return_tensors="pt")
+
+    def run_model(self, question: str, context: str) -> ModelOutput:
         prompt = self._build_prompt(question, context)
-        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = self._tokenize_prompt(prompt)
 
         device = next(self.model.parameters()).device
         inputs = {key: value.to(device) for key, value in inputs.items()}
@@ -95,15 +115,21 @@ class HFRunner(BaseRunner):
         generate_kwargs = {
             "max_new_tokens": self.max_new_tokens,
             "do_sample": do_sample,
-            "pad_token_id": self.tokenizer.eos_token_id,
         }
+        if self.tokenizer.pad_token_id is not None:
+            generate_kwargs["pad_token_id"] = self.tokenizer.pad_token_id
+        elif self.tokenizer.eos_token_id is not None:
+            generate_kwargs["pad_token_id"] = self.tokenizer.eos_token_id
         if do_sample:
             generate_kwargs["temperature"] = self.temperature
 
         with self.torch.no_grad():
             output_ids = self.model.generate(**inputs, **generate_kwargs)
 
-        prompt_length = inputs["input_ids"].shape[-1]
-        answer_ids = output_ids[0][prompt_length:]
-        answer = self.tokenizer.decode(answer_ids, skip_special_tokens=True)
-        return answer.strip()
+        input_length = inputs["input_ids"].shape[-1]
+        generated_ids = output_ids[0][input_length:]
+        raw_generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+        return ModelOutput(
+            raw_generated_text=raw_generated_text,
+            cleaned_answer=raw_generated_text.strip(),
+        )

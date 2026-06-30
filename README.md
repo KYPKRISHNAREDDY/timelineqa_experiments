@@ -123,6 +123,23 @@ To run the same smoke test on the real sample:
 python scripts/04_run_model.py --task atomic --sample data/samples/real_atomic_n50.jsonl --model_id Qwen/Qwen2.5-0.5B-Instruct --backend hf --retriever bm25 --top_k 5 --max_new_tokens 16 --temperature 0 --output outputs/predictions/real_atomic_n50_qwen05b_bm25.jsonl --limit 3 --debug_first_n 3
 ```
 
+To debug SmolLM2 output formatting:
+
+```bash
+python scripts/04_run_model.py \
+  --task atomic \
+  --sample data/samples/real_atomic_n50.jsonl \
+  --model_id HuggingFaceTB/SmolLM2-1.7B-Instruct \
+  --backend hf \
+  --retriever bm25 \
+  --top_k 5 \
+  --max_new_tokens 16 \
+  --temperature 0 \
+  --output outputs/predictions/debug_smollm17b.jsonl \
+  --limit 3 \
+  --debug_first_n 3
+```
+
 ## F. Evaluate
 
 ```bash

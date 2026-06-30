@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 
-from src.runners.base_runner import BaseRunner
+from src.runners.base_runner import BaseRunner, ModelOutput
 
 
 DEFAULT_PROMPT = """You are answering questions over a personal timeline.
@@ -38,7 +38,7 @@ class OllamaRunner(BaseRunner):
         if shutil.which("ollama") is None:
             raise RuntimeError("Ollama was not found. Install Ollama and make sure the 'ollama' command is on PATH.")
 
-    def run_model(self, question: str, context: str) -> str:
+    def run_model(self, question: str, context: str) -> ModelOutput:
         prompt = self.prompt_template.format(question=question, context=context)
         try:
             result = subprocess.run(
@@ -54,4 +54,8 @@ class OllamaRunner(BaseRunner):
                 f"Original error: {exc.stderr.strip()}"
             ) from exc
 
-        return result.stdout.strip()
+        raw_generated_text = result.stdout
+        return ModelOutput(
+            raw_generated_text=raw_generated_text,
+            cleaned_answer=raw_generated_text.strip(),
+        )

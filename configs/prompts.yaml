@@ -5,7 +5,6 @@ atomic: |-
   Do not write a sentence.
   Do not explain.
   Do not mention the episode id.
-  If the answer is a food item, return only the food item.
 
   Question:
   {question}

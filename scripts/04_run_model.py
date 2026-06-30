@@ -17,10 +17,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.retrieval.bm25_retriever import BM25Retriever
+from src.runners.base_runner import ModelOutput
 from src.utils.io import ensure_dir, read_jsonl, read_yaml
 
 
 ANSWER_PREFIX_RE = re.compile(r"(?:final|short)\s+answer\s*:\s*", re.IGNORECASE)
+YES_NO_RE = re.compile(r"^(yes|no)\b", re.IGNORECASE)
+TRAILING_SHORT_PUNCT_RE = re.compile(r"^[^\s]+[.!?,;:]+$")
 
 
 def safe_name(value: str) -> str:
@@ -53,8 +56,29 @@ def clean_prediction_text(text: str) -> str:
     for line in cleaned.splitlines():
         line = line.strip()
         if line:
-            return line
-    return ""
+            cleaned = line
+            break
+    else:
+        return ""
+
+    yes_no_match = YES_NO_RE.match(cleaned)
+    if yes_no_match:
+        return yes_no_match.group(1).lower()
+
+    if TRAILING_SHORT_PUNCT_RE.match(cleaned):
+        cleaned = cleaned.rstrip(".!?,;:")
+
+    return cleaned
+
+
+def split_runner_output(output: object) -> tuple[str, str]:
+    if isinstance(output, ModelOutput):
+        raw = output.raw_generated_text
+        cleaned = output.cleaned_answer
+    else:
+        raw = str(output or "")
+        cleaned = raw
+    return raw, clean_prediction_text(cleaned)
 
 
 def create_runner(
@@ -159,8 +183,8 @@ def main() -> None:
 
             context = build_context(retrieved)
             start = time.perf_counter()
-            raw_answer = runner.run_model(record["question"], context)
-            predicted_answer = clean_prediction_text(raw_answer)
+            runner_output = runner.run_model(record["question"], context)
+            raw_answer, predicted_answer = split_runner_output(runner_output)
             latency_sec = time.perf_counter() - start
 
             if index < args.debug_first_n:
@@ -170,7 +194,8 @@ def main() -> None:
                 print("Retrieved episode ids:", [episode["episode_id"] for episode in retrieved])
                 print("Retrieved context:")
                 print(context)
-                print("Prediction:", predicted_answer)
+                print("Raw prediction:", raw_answer)
+                print("Cleaned prediction:", predicted_answer)
                 print("--- END DEBUG ---")
 
             prediction = {
@@ -182,6 +207,7 @@ def main() -> None:
                 "top_k": args.top_k,
                 "question": record.get("question"),
                 "gold_answer": record.get("gold_answer"),
+                "raw_predicted_answer": raw_answer,
                 "predicted_answer": predicted_answer,
                 "retrieved_context": context,
                 "retrieved_episode_ids": [episode["episode_id"] for episode in retrieved],
