@@ -1,9 +1,9 @@
 task: multihop
 data_source: real_timelineqa
 seed: 42
-sample_sizes: [50]
+sample_sizes: [25]
 max_episodes_per_question: 200
-max_seed_attempts: 20
+max_seed_attempts: 5
 retriever: bm25
 top_k: 10
 max_new_tokens: 32

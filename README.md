@@ -117,6 +117,7 @@ python scripts/03_prepare_timelineqa_data.py \
   --n 50 \
   --seed 42 \
   --max_episodes_per_question 200 \
+  --max_seed_attempts 20 \
   --output data/samples/real_multihop_n50.jsonl
 ```
 
@@ -130,6 +131,15 @@ python scripts/07_run_experiment_plan.py \
 ```
 
 This uses BM25 with `top_k=10` and runs `Qwen/Qwen2.5-1.5B-Instruct` only.
+
+If the full `n=50` run is blocked by sparse multi-hop data, run the smaller real-data emergency plan:
+
+```bash
+python scripts/07_run_experiment_plan.py \
+  --plan configs/multihop_baseline_n25_plan.yaml \
+  --resume \
+  --copy_to_drive /content/drive/MyDrive/timelineqa_results
+```
 
 ## E. Run First Smoke Test
 

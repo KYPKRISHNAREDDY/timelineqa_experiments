@@ -105,7 +105,7 @@ def prepare_command(plan: dict[str, Any], n: int, output_path: Path) -> list[str
     task = plan["task"]
     data_source = plan["data_source"]
     if data_source == "real_timelineqa":
-        return [
+        command = [
             sys.executable,
             "scripts/03_prepare_timelineqa_data.py",
             "--task",
@@ -119,6 +119,9 @@ def prepare_command(plan: dict[str, Any], n: int, output_path: Path) -> list[str
             "--output",
             rel(output_path),
         ]
+        if task == "multihop" and "max_seed_attempts" in plan:
+            command.extend(["--max_seed_attempts", str(plan["max_seed_attempts"])])
+        return command
     if data_source == "toy":
         return [
             sys.executable,

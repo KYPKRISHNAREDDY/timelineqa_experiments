@@ -61,6 +61,14 @@ class TimelineQAPrepError(RuntimeError):
     pass
 
 
+class MultihopQuerySkip(RuntimeError):
+    pass
+
+
+class MultihopSeedSkip(RuntimeError):
+    pass
+
+
 def text_value(value: Any) -> str:
     if isinstance(value, list):
         return " ".join(str(item) for item in value if item not in (None, ""))
@@ -471,7 +479,7 @@ def to_python_value(value: Any) -> Any:
 
 def sample_row(df: Any, rng: random.Random) -> Any:
     if len(df) == 0:
-        raise TimelineQAPrepError("Cannot sample variables from an empty generated log dataframe.")
+        raise MultihopQuerySkip("empty generated log dataframe")
     return df.sample(1, random_state=rng.randint(0, 2**31 - 1)).iloc[0]
 
 
@@ -492,13 +500,18 @@ def apply_query_variables(row: dict[str, str], df: Any, df_flat: Any, rng: rando
             sampled = sample_row(source, rng)
             for variable in variables:
                 if variable not in sampled.index:
-                    continue
+                    raise MultihopQuerySkip(f"required variable '{variable}' is missing")
                 value = to_python_value(sampled[variable])
+                if value == "":
+                    raise MultihopQuerySkip(f"required variable '{variable}' is empty")
                 if variable == "people" and isinstance(value, str) and "," in value:
                     people = [person.strip() for person in value.split(",") if person.strip()]
                     if people:
                         value = rng.choice(people)
                 format_dict[variable] = value
+            missing_variables = [variable for variable in variables if variable not in format_dict]
+            if missing_variables:
+                raise MultihopQuerySkip(f"could not instantiate variables: {', '.join(missing_variables)}")
             query = query.format(**format_dict)
 
     for placeholder in sorted(format_dict):
@@ -550,30 +563,49 @@ def generate_multihop_artifacts(directory: Path, seed: int) -> None:
 
     print("Generating TimelineQA multihop query artifacts in project data directory.")
     print(f"Equivalent official command: {official_multihop_command(directory)}")
+    succeeded = 0
+    failed = 0
+    first_failure_reason = ""
     for row in rows:
         q_id = row["q_id"]
-        datafiles = [item.strip() for item in row["datafiles"].split(",") if item.strip()]
-        if not datafiles:
-            continue
+        try:
+            datafiles = [item.strip() for item in row["datafiles"].split(",") if item.strip()]
+            if not datafiles:
+                raise MultihopQuerySkip("no datafiles listed")
 
-        df, df_flat = process_multihop_data_file(datafiles[0], directory)
-        df2 = df3 = None
-        if len(datafiles) > 1:
-            df2, df3 = process_multihop_data_file(datafiles[1], directory)
+            df, df_flat = process_multihop_data_file(datafiles[0], directory)
+            df2 = df3 = None
+            if len(datafiles) > 1:
+                df2, df3 = process_multihop_data_file(datafiles[1], directory)
 
-        query, question, params = apply_query_variables(row, df, df_flat, rng)
-        result = execute_sql_query(query, {"df": df, "df1": df_flat, "df2": df2, "df3": df3})
-        result.to_csv(directory / f"{q_id}-result.csv")
+            query, question, params = apply_query_variables(row, df, df_flat, rng)
+            result = execute_sql_query(query, {"df": df, "df1": df_flat, "df2": df2, "df3": df3})
+            result.to_csv(directory / f"{q_id}-result.csv")
 
-        queries_data["q_id"].append(q_id)
-        queries_data["query"].append(query)
-        queries_data["params"].append(json.dumps(params, ensure_ascii=False))
-        queries_data["question"].append(question)
-        queries_data["datafiles"].append(",".join(datafiles))
-        queries_data["answer_column"].append(row["answer_column"])
-        queries_data["answer_type"].append(row["answer_type"])
+            queries_data["q_id"].append(q_id)
+            queries_data["query"].append(query)
+            queries_data["params"].append(json.dumps(params, ensure_ascii=False))
+            queries_data["question"].append(question)
+            queries_data["datafiles"].append(",".join(datafiles))
+            queries_data["answer_column"].append(row["answer_column"])
+            queries_data["answer_type"].append(row["answer_type"])
+            succeeded += 1
+        except MultihopQuerySkip as exc:
+            failed += 1
+            if not first_failure_reason:
+                first_failure_reason = str(exc)
+            print(f"Skipping {directory.name} {q_id}: {exc}.")
+        except Exception as exc:
+            failed += 1
+            if not first_failure_reason:
+                first_failure_reason = str(exc)
+            print(f"Skipping {directory.name} {q_id}: {exc}.")
 
     pd.DataFrame(data=queries_data).to_csv(directory / "queries.csv", index=False)
+    print(f"Multihop templates succeeded: {succeeded}; failed/skipped: {failed}.")
+    if succeeded == 0:
+        reason = first_failure_reason or "all multihop templates failed"
+        raise MultihopSeedSkip(reason)
 
 
 def missing_multihop_result_files(directory: Path) -> list[Path]:
@@ -613,6 +645,8 @@ def ensure_multihop_artifacts(seed: int, category: str = DEFAULT_CATEGORY) -> Pa
 
     try:
         generate_multihop_artifacts(directory, seed)
+    except MultihopSeedSkip:
+        raise
     except Exception as exc:
         raise TimelineQAPrepError(
             "Could not generate multihop artifacts from official query templates.\n"
@@ -797,6 +831,7 @@ def build_multihop_candidates(
     seed: int,
     target_n: int,
     max_episodes_per_question: int | None,
+    max_seed_attempts: int = 20,
     category: str = DEFAULT_CATEGORY,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
     existing_records = find_existing_qa_db_records("multihop")
@@ -807,11 +842,25 @@ def build_multihop_candidates(
     all_candidates: list[dict[str, Any]] = []
     all_episodes: list[dict[str, Any]] = []
     lifelog_ids: list[str] = []
-    max_lifelogs = max(3, (target_n // 20) + 3)
 
-    for offset in range(max_lifelogs):
+    for offset in range(max_seed_attempts):
         current_seed = seed + offset
-        candidates, episodes, lifelog_id = build_multihop_candidates_for_seed(current_seed, category)
+        lifelog_id = f"{category}_seed{current_seed}"
+        try:
+            candidates, episodes, lifelog_id = build_multihop_candidates_for_seed(current_seed, category)
+        except MultihopSeedSkip as exc:
+            print(f"Skipping {lifelog_id}: {exc}.")
+            continue
+        except Exception as exc:
+            if "empty generated log dataframe" in str(exc):
+                print(f"Skipping {lifelog_id}: empty generated log dataframe.")
+                continue
+            raise
+
+        if not candidates:
+            print(f"Skipping {lifelog_id}: no valid multihop candidates.")
+            continue
+
         lifelog_ids.append(lifelog_id)
         all_episodes.extend(episodes)
         all_candidates.extend(candidates)
@@ -826,6 +875,20 @@ def build_multihop_candidates(
         print(f"Collected {eligible_count} eligible multihop candidates after lifelog {lifelog_id}.")
         if eligible_count >= target_n:
             break
+
+    eligible_total = len(
+        [
+            candidate
+            for candidate in all_candidates
+            if not max_episodes_per_question
+            or len(set(candidate["evidence_episode_ids"])) <= max_episodes_per_question
+        ]
+    )
+    if eligible_total < target_n:
+        raise TimelineQAPrepError(
+            f"requested n={target_n} but only collected {eligible_total} real multihop candidates "
+            f"after {max_seed_attempts} seed attempts. Suggest lowering n or increasing --max_seed_attempts."
+        )
 
     return all_candidates, all_episodes, ",".join(lifelog_ids)
 
@@ -898,6 +961,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", default=None)
     parser.add_argument("--max_episodes_per_question", type=int, default=100)
+    parser.add_argument("--max_seed_attempts", type=int, default=20)
     parser.add_argument("--allow_toy_fallback", action="store_true")
     args = parser.parse_args()
 
@@ -916,6 +980,7 @@ def main() -> None:
                 args.seed,
                 args.n,
                 args.max_episodes_per_question,
+                args.max_seed_attempts,
             )
 
         print(f"Loaded lifelog_id={lifelog_id}")
