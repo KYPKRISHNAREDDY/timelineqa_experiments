@@ -9,8 +9,11 @@ from src.runners.base_runner import BaseRunner
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPT = """You are answering questions over a personal timeline.
 Use only the provided timeline episodes.
-Return only the final answer.
+Return ONLY the short final answer.
+Do not write a sentence.
 Do not explain.
+Do not mention the episode id.
+If the answer is a food item, return only the food item.
 
 Question:
 {question}
@@ -18,7 +21,7 @@ Question:
 Timeline episodes:
 {context}
 
-Answer:"""
+Short answer:"""
 
 
 class HFRunner(BaseRunner):
@@ -27,7 +30,7 @@ class HFRunner(BaseRunner):
     def __init__(
         self,
         model_id: str,
-        max_new_tokens: int = 32,
+        max_new_tokens: int = 16,
         temperature: float = 0.0,
         prompt_template: str = DEFAULT_PROMPT,
     ):

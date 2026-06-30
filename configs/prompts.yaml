@@ -1,8 +1,11 @@
 atomic: |-
   You are answering questions over a personal timeline.
   Use only the provided timeline episodes.
-  Return only the final answer.
+  Return ONLY the short final answer.
+  Do not write a sentence.
   Do not explain.
+  Do not mention the episode id.
+  If the answer is a food item, return only the food item.
 
   Question:
   {question}
@@ -10,7 +13,7 @@ atomic: |-
   Timeline episodes:
   {context}
 
-  Answer:
+  Short answer:
 
 multihop: |-
   You are answering questions over a personal timeline.

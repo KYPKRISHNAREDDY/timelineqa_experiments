@@ -20,6 +20,9 @@ from src.retrieval.bm25_retriever import BM25Retriever
 from src.utils.io import ensure_dir, read_jsonl, read_yaml
 
 
+ANSWER_PREFIX_RE = re.compile(r"(?:final|short)\s+answer\s*:\s*", re.IGNORECASE)
+
+
 def safe_name(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower()
 
@@ -38,6 +41,20 @@ def build_context(retrieved: list[dict[str, Any]]) -> str:
     for episode in retrieved:
         lines.append(f"[{episode['episode_id']}] {episode['text']}")
     return "\n".join(lines)
+
+
+def clean_prediction_text(text: str) -> str:
+    """Keep evaluation-friendly short answer text from a model generation."""
+    cleaned = (text or "").strip()
+    parts = ANSWER_PREFIX_RE.split(cleaned)
+    if len(parts) > 1:
+        cleaned = parts[-1].strip()
+
+    for line in cleaned.splitlines():
+        line = line.strip()
+        if line:
+            return line
+    return ""
 
 
 def create_runner(
@@ -78,11 +95,26 @@ def main() -> None:
     parser.add_argument("--backend", choices=["hf", "ollama"], default="hf")
     parser.add_argument("--retriever", choices=["bm25"], default="bm25")
     parser.add_argument("--top_k", type=int, default=5)
-    parser.add_argument("--max_new_tokens", type=int, default=32)
+    parser.add_argument(
+        "--max_new_tokens",
+        type=int,
+        default=None,
+        help="Generation length. Defaults to 16 for atomic and 32 for multihop.",
+    )
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--output", default=None)
     parser.add_argument("--limit", type=int, default=None, help="Smoke-test only the first N questions.")
+    parser.add_argument(
+        "--debug_first_n",
+        type=int,
+        default=0,
+        help="Print question, gold answer, retrieval, and prediction for the first N examples.",
+    )
     args = parser.parse_args()
+
+    max_new_tokens = args.max_new_tokens
+    if max_new_tokens is None:
+        max_new_tokens = 16 if args.task == "atomic" else 32
 
     os.environ.setdefault("HF_HOME", str(PROJECT_ROOT / ".hf_cache"))
     os.environ.setdefault("TRANSFORMERS_CACHE", str(PROJECT_ROOT / ".hf_cache"))
@@ -108,7 +140,7 @@ def main() -> None:
     runner = create_runner(
         backend=args.backend,
         model_id=args.model_id,
-        max_new_tokens=args.max_new_tokens,
+        max_new_tokens=max_new_tokens,
         temperature=args.temperature,
         prompt_template=prompt_template,
     )
@@ -117,7 +149,7 @@ def main() -> None:
     created_at = datetime.now(timezone.utc).isoformat()
 
     with output_path.open("w", encoding="utf-8") as handle:
-        for record in tqdm(records, desc="Running model"):
+        for index, record in enumerate(tqdm(records, desc="Running model")):
             episodes = record.get("episodes") or []
             if args.retriever == "bm25":
                 retriever = BM25Retriever(episodes)
@@ -127,8 +159,19 @@ def main() -> None:
 
             context = build_context(retrieved)
             start = time.perf_counter()
-            predicted_answer = runner.run_model(record["question"], context)
+            raw_answer = runner.run_model(record["question"], context)
+            predicted_answer = clean_prediction_text(raw_answer)
             latency_sec = time.perf_counter() - start
+
+            if index < args.debug_first_n:
+                print("\n--- DEBUG EXAMPLE", index + 1, "---")
+                print("Question:", record.get("question"))
+                print("Gold:", record.get("gold_answer"))
+                print("Retrieved episode ids:", [episode["episode_id"] for episode in retrieved])
+                print("Retrieved context:")
+                print(context)
+                print("Prediction:", predicted_answer)
+                print("--- END DEBUG ---")
 
             prediction = {
                 "question_id": record.get("question_id"),

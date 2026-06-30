@@ -168,22 +168,26 @@ def find_real_samples(task: str) -> list[dict[str, Any]]:
 def make_toy_atomic(n: int, seed: int) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     foods = ["sushi", "pasta", "salad", "dosa", "sandwich", "noodles"]
+    drinks = ["tea", "coffee", "juice", "water"]
+    activities = ["read a book", "watched a movie", "went for a walk", "called a friend"]
     records: list[dict[str, Any]] = []
 
     for index in range(n):
         day = index + 1
         date = f"2010/01/{day:02d}"
+        meal = "lunch" if index % 2 == 0 else "dinner"
+        other_meal = "dinner" if meal == "lunch" else "lunch"
         food = rng.choice(foods)
-        distractor_food = rng.choice([item for item in foods if item != food])
         evidence_id = f"e{index + 1}_1"
         episodes = [
-            {"episode_id": evidence_id, "text": f"{date}, I had lunch with a friend. I ate {food}."},
-            {"episode_id": f"e{index + 1}_2", "text": f"2010/02/{day:02d}, I ate {distractor_food} for dinner."},
-            {"episode_id": f"e{index + 1}_3", "text": f"{date}, I watched a movie in the evening."},
+            {"episode_id": evidence_id, "text": f"{date}, I ate {food} for {meal}."},
+            {"episode_id": f"e{index + 1}_2", "text": f"{date}, I drank {rng.choice(drinks)} during {other_meal}."},
+            {"episode_id": f"e{index + 1}_3", "text": f"{date}, I {rng.choice(activities)} in the evening."},
+            {"episode_id": f"e{index + 1}_4", "text": f"2010/02/{day:02d}, I discussed travel plans with a friend."},
         ]
         records.append(
             make_record(
-                question=f"What did I eat on {date}?",
+                question=f"What did I eat for {meal} on {date}?",
                 answer=food,
                 episodes=episodes,
                 evidence_ids=[evidence_id],

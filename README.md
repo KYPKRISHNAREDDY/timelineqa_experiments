@@ -21,7 +21,7 @@ model = Qwen/Qwen2.5-0.5B-Instruct
 backend = hf
 retriever = bm25
 top_k = 5
-max_new_tokens = 32
+max_new_tokens = 16
 temperature = 0
 ```
 
@@ -94,10 +94,10 @@ If real TimelineQA data is not available yet, the script creates toy samples so 
 Run only 3 questions first:
 
 ```bash
-python scripts/04_run_model.py --task atomic --sample data/samples/atomic_n50.jsonl --model_id Qwen/Qwen2.5-0.5B-Instruct --backend hf --retriever bm25 --top_k 5 --max_new_tokens 32 --temperature 0 --output outputs/predictions/atomic_n50_qwen05b_bm25.jsonl --limit 3
+python scripts/04_run_model.py --task atomic --sample data/samples/atomic_n50.jsonl --model_id Qwen/Qwen2.5-0.5B-Instruct --backend hf --retriever bm25 --top_k 5 --max_new_tokens 16 --temperature 0 --output outputs/predictions/atomic_n50_qwen05b_bm25.jsonl --limit 3 --debug_first_n 3
 ```
 
-This downloads only the selected model. It does not run every model.
+This downloads only the selected model. It does not run every model. The `--debug_first_n 3` flag prints the first three questions, gold answers, retrieved episode ids, retrieved context, and predictions so you can inspect retrieval quality.
 
 ## E. Evaluate
 
